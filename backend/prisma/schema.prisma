@@ -1,0 +1,371 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum SubscriptionPlan {
+  FREE
+  PREMIUM
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  PAST_DUE
+}
+
+enum ResumeStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum NotificationType {
+  SUCCESS
+  ERROR
+  INFO
+  WARNING
+  AUTOSAVE
+  REMINDER
+}
+
+enum ActivityType {
+  RESUME_CREATED
+  RESUME_UPDATED
+  RESUME_DELETED
+  RESUME_DOWNLOADED
+  RESUME_SHARED
+  TEMPLATE_USED
+  AI_USED
+  ATS_CHECKED
+  PROFILE_UPDATED
+  SUBSCRIPTION_CHANGED
+}
+
+enum ExportFormat {
+  PDF
+  DOCX
+  TXT
+  JSON
+}
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  password          String?
+  name              String
+  avatar            String?
+  phone             String?
+  address           String?
+  website           String?
+  linkedin          String?
+  github            String?
+  portfolio         String?
+  role              UserRole  @default(USER)
+  isEmailVerified   Boolean   @default(false)
+  emailVerifyToken  String?
+  resetPasswordToken String?
+  resetPasswordExpires DateTime?
+  googleId          String?   @unique
+  profileCompletion Int       @default(0)
+  settings          Json      @default("{}")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  lastLoginAt       DateTime?
+
+  resumes           Resume[]
+  coverLetters      CoverLetter[]
+  subscriptions     Subscription[]
+  notifications     Notification[]
+  activities        Activity[]
+  aiUsages          AIUsage[]
+  feedbacks         Feedback[]
+  favoriteTemplates FavoriteTemplate[]
+  favoriteResumes   FavoriteResume[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Resume {
+  id              String       @id @default(uuid())
+  userId          String
+  title           String       @default("Untitled Resume")
+  slug            String       @unique @default(uuid())
+  templateId      String
+  status          ResumeStatus @default(DRAFT)
+  content         Json         @default("{}")
+  theme           Json         @default("{}")
+  atsScore        Int          @default(0)
+  resumeScore     Int          @default(0)
+  isFavorite      Boolean      @default(false)
+  downloadCount   Int          @default(0)
+  viewCount       Int          @default(0)
+  shareToken      String?      @unique
+  isPublic        Boolean      @default(false)
+  lastEditedAt    DateTime     @default(now())
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template        Template     @relation(fields: [templateId], references: [id])
+  versions        ResumeVersion[]
+  exports         ResumeExport[]
+  analytics       ResumeAnalytics[]
+  favorites       FavoriteResume[]
+
+  @@index([userId])
+  @@index([templateId])
+  @@index([slug])
+  @@map("resumes")
+}
+
+model ResumeVersion {
+  id          String   @id @default(uuid())
+  resumeId    String
+  version     Int
+  content     Json
+  theme       Json
+  label       String?
+  createdAt   DateTime @default(now())
+
+  resume      Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@unique([resumeId, version])
+  @@index([resumeId])
+  @@map("resume_versions")
+}
+
+model Template {
+  id            String   @id @default(uuid())
+  name          String
+  slug          String   @unique
+  description   String?
+  category      String
+  tags          String[]
+  thumbnail     String?
+  previewImages String[]
+  isPremium     Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  popularity    Int      @default(0)
+  usageCount    Int      @default(0)
+  defaultTheme  Json     @default("{}")
+  layout        Json     @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  resumes       Resume[]
+  favorites     FavoriteTemplate[]
+
+  @@index([category])
+  @@index([slug])
+  @@map("templates")
+}
+
+model FavoriteTemplate {
+  id         String   @id @default(uuid())
+  userId     String
+  templateId String
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, templateId])
+  @@map("favorite_templates")
+}
+
+model FavoriteResume {
+  id        String   @id @default(uuid())
+  userId    String
+  resumeId  String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, resumeId])
+  @@map("favorite_resumes")
+}
+
+model CoverLetter {
+  id          String   @id @default(uuid())
+  userId      String
+  resumeId    String?
+  title       String   @default("Untitled Cover Letter")
+  content     Json     @default("{}")
+  templateId  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("cover_letters")
+}
+
+model Subscription {
+  id                   String             @id @default(uuid())
+  userId               String
+  plan                 SubscriptionPlan   @default(FREE)
+  status               SubscriptionStatus @default(ACTIVE)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  paypalSubscriptionId String?
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoices             Invoice[]
+
+  @@index([userId])
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id              String   @id @default(uuid())
+  subscriptionId  String
+  amount          Float
+  currency        String   @default("USD")
+  status          String
+  stripeInvoiceId String?
+  pdfUrl          String?
+  createdAt       DateTime @default(now())
+
+  subscription    Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@map("invoices")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType @default(INFO)
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+model Activity {
+  id        String       @id @default(uuid())
+  userId    String
+  type      ActivityType
+  metadata  Json         @default("{}")
+  createdAt DateTime     @default(now())
+
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("activities")
+}
+
+model AIUsage {
+  id        String   @id @default(uuid())
+  userId    String
+  feature   String
+  tokens    Int      @default(0)
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("ai_usages")
+}
+
+model ResumeExport {
+  id        String       @id @default(uuid())
+  resumeId  String
+  format    ExportFormat
+  fileUrl   String?
+  createdAt DateTime     @default(now())
+
+  resume    Resume       @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId])
+  @@map("resume_exports")
+}
+
+model ResumeAnalytics {
+  id        String   @id @default(uuid())
+  resumeId  String
+  event     String
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId])
+  @@index([createdAt])
+  @@map("resume_analytics")
+}
+
+model Feedback {
+  id        String   @id @default(uuid())
+  userId    String?
+  rating    Int
+  message   String
+  category  String?
+  createdAt DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("feedbacks")
+}
+
+model ATSReport {
+  id          String   @id @default(uuid())
+  resumeId    String
+  userId      String
+  overallScore Int
+  keywords    Json     @default("{}")
+  formatting  Json     @default("{}")
+  sections    Json     @default("{}")
+  length      Json     @default("{}")
+  readability Json     @default("{}")
+  suggestions Json     @default("[]")
+  createdAt   DateTime @default(now())
+
+  @@index([resumeId])
+  @@index([userId])
+  @@map("ats_reports")
+}
+
+model JobMatch {
+  id              String   @id @default(uuid())
+  resumeId        String
+  userId          String
+  jobDescription  String
+  matchPercentage Int
+  missingSkills   Json     @default("[]")
+  keywordSuggestions Json  @default("[]")
+  createdAt       DateTime @default(now())
+
+  @@index([resumeId])
+  @@index([userId])
+  @@map("job_matches")
+}
