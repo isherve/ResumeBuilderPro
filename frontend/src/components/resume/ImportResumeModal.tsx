@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Upload, FileText, X, Loader2 } from 'lucide-react';
@@ -34,7 +34,19 @@ export function ImportResumeModal({ open, onClose }: ImportResumeModalProps) {
   });
 
   const templates = templatesData?.data?.data || [];
-  const selectedTemplate = templates.find((template: Template) => template.id === templateId) ?? templates[0];
+  const professionalTemplate = templates.find(
+    (template: Template) =>
+      template.slug === 'professional' || template.name.toLowerCase() === 'professional',
+  );
+  const selectedTemplate =
+    templates.find((template: Template) => template.id === templateId) ??
+    professionalTemplate ??
+    templates[0];
+
+  useEffect(() => {
+    if (!open || templateId || templates.length === 0) return;
+    setTemplateId(professionalTemplate?.id ?? templates[0]?.id ?? '');
+  }, [open, templateId, templates, professionalTemplate?.id]);
 
   const reset = () => {
     setFile(null);
@@ -128,7 +140,7 @@ export function ImportResumeModal({ open, onClose }: ImportResumeModalProps) {
           </button>
           <CardTitle>Import existing CV / Resume</CardTitle>
           <CardDescription>
-            Upload a past resume and we&apos;ll fill in your new one automatically.
+            Upload your CV and we&apos;ll place each section in the right field on a professional layout.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -215,7 +227,7 @@ export function ImportResumeModal({ open, onClose }: ImportResumeModalProps) {
           )}
 
           <p className="text-xs text-muted-foreground">
-            AI extracts sections like experience, education, and skills. Always review imported data before downloading.
+            Each section stays separate — experience, education, skills, and other blocks are not mixed together.
           </p>
 
           <div className="flex gap-3 pt-2">

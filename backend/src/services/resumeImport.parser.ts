@@ -45,9 +45,10 @@ const SECTION_KEYWORDS = new Set([
 ]);
 
 const SECTION_TARGETS: Record<string, SectionTarget> = {
-  personality: 'summary',
+  personality: 'custom',
   summary: 'summary',
   profile: 'summary',
+  'professional summary': 'summary',
   objective: 'summary',
   about: 'summary',
   biography: 'summary',
@@ -419,12 +420,135 @@ function linesToVolunteerEntries(lines: string[]) {
   });
 }
 
-function appendSummary(existing: string | undefined, addition: string, title?: string): string {
-  const chunk = title ? `${title}\n${addition}` : addition;
-  if (!chunk.trim()) return existing ?? '';
-  if (!existing?.trim()) return chunk.trim();
-  if (existing.includes(chunk.trim())) return existing;
-  return `${existing.trim()}\n\n${chunk.trim()}`;
+function appendSummary(existing: string | undefined, addition: string): string {
+  const body = stripSectionHeadersFromText(addition);
+  if (!body) return existing ?? '';
+  if (!existing?.trim()) return body;
+  if (existing.includes(body)) return existing;
+  return `${existing.trim()}\n\n${body}`;
+}
+
+function stripSectionHeadersFromText(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !isSectionHeaderLine(line))
+    .join('\n')
+    .trim();
+}
+
+function cleanSummaryText(text?: string): string | undefined {
+  if (!text?.trim()) return undefined;
+  const cleaned = stripSectionHeadersFromText(text);
+  if (!cleaned || isBadSummary(cleaned)) return undefined;
+  return cleaned;
+}
+
+function pickList<T>(primary: T[] | undefined, fallback: T[] | undefined): T[] | undefined {
+  if (primary?.length) return primary;
+  if (fallback?.length) return fallback;
+  return undefined;
+}
+
+function contentFingerprint(content: ResumeContent): string {
+  const parts = [
+    content.summary ?? '',
+    ...(content.experience ?? []).flatMap((item) => [
+      item.jobTitle,
+      item.company,
+      ...(item.responsibilities ?? []),
+    ]),
+    ...(content.education ?? []).flatMap((item) => [
+      item.degree,
+      item.institution,
+      item.description ?? '',
+    ]),
+    ...(content.skills?.technical ?? []).map((skill) => skill.name),
+  ];
+  return parts.join('\n').toLowerCase();
+}
+
+function dedupeCustomSections(content: ResumeContent): ResumeContent['customSections'] {
+  const fingerprint = contentFingerprint(content);
+  const sections = content.customSections ?? [];
+  const seen = new Set<string>();
+
+  return sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => {
+        const normalized = item.content.trim().toLowerCase();
+        if (!normalized) return false;
+        if (seen.has(normalized)) return false;
+        if (normalized.length > 20 && fingerprint.includes(normalized.slice(0, Math.min(normalized.length, 80)))) {
+          return false;
+        }
+        seen.add(normalized);
+        return true;
+      }),
+    }))
+    .filter((section) => section.items.length > 0);
+}
+
+const PROFESSIONAL_SECTION_ORDER = [
+  'personalInfo',
+  'summary',
+  'experience',
+  'education',
+  'skills',
+  'certifications',
+  'languages',
+  'projects',
+  'achievements',
+  'publications',
+  'volunteer',
+  'customSections',
+] as const;
+
+export function finalizeProfessionalImport(content: ResumeContent): ResumeContent {
+  const result: ResumeContent = {
+    ...content,
+    summary: cleanSummaryText(content.summary),
+    customSections: dedupeCustomSections(content),
+  };
+
+  const visibleSections = PROFESSIONAL_SECTION_ORDER.filter((key) => {
+    switch (key) {
+      case 'personalInfo':
+        return Boolean(result.personalInfo);
+      case 'summary':
+        return Boolean(result.summary?.trim());
+      case 'experience':
+        return (result.experience?.length ?? 0) > 0;
+      case 'education':
+        return (result.education?.length ?? 0) > 0;
+      case 'skills':
+        return (result.skills?.technical?.length ?? 0) > 0 || (result.skills?.soft?.length ?? 0) > 0;
+      case 'certifications':
+        return (result.certifications?.length ?? 0) > 0;
+      case 'languages':
+        return (result.languages?.length ?? 0) > 0;
+      case 'projects':
+        return (result.projects?.length ?? 0) > 0;
+      case 'achievements':
+        return (result.achievements?.length ?? 0) > 0;
+      case 'publications':
+        return (result.publications?.length ?? 0) > 0;
+      case 'volunteer':
+        return (result.volunteer?.length ?? 0) > 0;
+      case 'customSections':
+        return (result.customSections?.length ?? 0) > 0;
+      default:
+        return false;
+    }
+  });
+
+  result.sectionOrder = [...visibleSections];
+  result.hiddenSections = [...(result.hiddenSections ?? []), 'references'].filter(
+    (section, index, list) => list.indexOf(section) === index,
+  );
+
+  return result;
 }
 
 export function isBadParsedName(firstName?: string, lastName?: string): boolean {
@@ -478,7 +602,7 @@ export function buildContentFromSections(sections: ParsedSection[]): Partial<Res
 
     switch (target) {
       case 'summary':
-        content.summary = appendSummary(content.summary, body, section.title);
+        content.summary = appendSummary(content.summary, body);
         break;
       case 'experience':
         content.experience = [...(content.experience ?? []), ...linesToExperienceEntries(section.lines)];
@@ -540,18 +664,6 @@ export function buildContentFromSections(sections: ParsedSection[]): Partial<Res
   return content;
 }
 
-function mergeUniqueById<T extends { id: string }>(existing: T[] | undefined, incoming: T[]): T[] {
-  const seen = new Set((existing ?? []).map((item) => item.id));
-  return [...(existing ?? []), ...incoming.filter((item) => !seen.has(item.id))];
-}
-
-function mergeStringField(existing: string | undefined, incoming: string | undefined): string | undefined {
-  if (!incoming?.trim()) return existing;
-  if (!existing?.trim()) return incoming.trim();
-  if (existing.includes(incoming.trim())) return existing;
-  return `${existing.trim()}\n\n${incoming.trim()}`;
-}
-
 export function enrichImportedContent(rawText: string, parsed: ResumeContent): ResumeContent {
   const sections = splitTextIntoSections(rawText);
   const fromSections = buildContentFromSections(sections);
@@ -579,91 +691,27 @@ export function enrichImportedContent(rawText: string, parsed: ResumeContent): R
   if (!personalInfo.linkedin && linkedinMatch) personalInfo.linkedin = `https://${linkedinMatch[0]}`;
   if (!personalInfo.github && githubMatch) personalInfo.github = `https://${githubMatch[0]}`;
 
-  const enriched: ResumeContent = {
+  const enriched: ResumeContent = finalizeProfessionalImport({
     ...parsed,
     personalInfo,
     summary:
       isBadSummary(parsed.summary) && fromSections.summary?.trim()
-        ? fromSections.summary
-        : mergeStringField(parsed.summary, fromSections.summary),
-    experience:
-      (fromSections.experience?.length ?? 0) > (parsed.experience?.length ?? 0)
-        ? fromSections.experience
-        : parsed.experience?.length
-          ? parsed.experience
-          : fromSections.experience,
-    education:
-      (fromSections.education?.length ?? 0) > (parsed.education?.length ?? 0)
-        ? fromSections.education
-        : parsed.education?.length
-          ? parsed.education
-          : fromSections.education,
+        ? cleanSummaryText(fromSections.summary)
+        : cleanSummaryText(parsed.summary),
+    experience: pickList(parsed.experience, fromSections.experience),
+    education: pickList(parsed.education, fromSections.education),
     skills: {
-      technical:
-        (parsed.skills?.technical?.length ?? 0) > 0
-          ? parsed.skills?.technical
-          : fromSections.skills?.technical,
+      technical: pickList(parsed.skills?.technical, fromSections.skills?.technical) ?? [],
       soft: parsed.skills?.soft ?? [],
     },
-    projects: mergeUniqueById(parsed.projects, fromSections.projects ?? []),
-    certifications: mergeUniqueById(parsed.certifications, fromSections.certifications ?? []),
-    languages: mergeUniqueById(parsed.languages, fromSections.languages ?? []),
-    achievements: mergeUniqueById(parsed.achievements, fromSections.achievements ?? []),
-    publications: mergeUniqueById(parsed.publications, fromSections.publications ?? []),
-    volunteer: mergeUniqueById(parsed.volunteer, fromSections.volunteer ?? []),
-    customSections: mergeUniqueById(parsed.customSections, fromSections.customSections ?? []),
-  };
-
-  const parsedTextLength =
-    (enriched.summary?.length ?? 0) +
-    (enriched.experience ?? []).reduce((sum, item) => sum + JSON.stringify(item).length, 0) +
-    (enriched.education ?? []).reduce((sum, item) => sum + JSON.stringify(item).length, 0) +
-    (enriched.customSections ?? []).reduce(
-      (sum, section) => sum + section.items.reduce((inner, item) => inner + item.content.length, 0),
-      0,
-    );
-
-  if (parsedTextLength < rawText.length * 0.35) {
-    const fallbackItems = compactLines(
-      sections
-        .filter((section) => section.key !== '_header')
-        .flatMap((section) => section.lines),
-    ).map((block) => ({ id: uuidv4(), content: block }));
-
-    if (fallbackItems.length) {
-      enriched.customSections = mergeUniqueById(enriched.customSections, [
-        {
-          id: uuidv4(),
-          title: 'Additional Information',
-          items: fallbackItems,
-        },
-      ]);
-    } else if (!enriched.summary?.trim()) {
-      enriched.summary = rawText.slice(0, 4000).trim();
-    }
-  }
-
-  if (!enriched.sectionOrder?.length) {
-    enriched.sectionOrder = [
-      'personalInfo',
-      'summary',
-      'experience',
-      'education',
-      'skills',
-      'projects',
-      'certifications',
-      'languages',
-      'achievements',
-      'publications',
-      'volunteer',
-      'customSections',
-    ];
-  } else if (
-    (enriched.customSections?.length ?? 0) > 0 &&
-    !enriched.sectionOrder.includes('customSections')
-  ) {
-    enriched.sectionOrder = [...enriched.sectionOrder, 'customSections'];
-  }
+    projects: pickList(parsed.projects, fromSections.projects),
+    certifications: pickList(parsed.certifications, fromSections.certifications),
+    languages: pickList(parsed.languages, fromSections.languages),
+    achievements: pickList(parsed.achievements, fromSections.achievements),
+    publications: pickList(parsed.publications, fromSections.publications),
+    volunteer: pickList(parsed.volunteer, fromSections.volunteer),
+    customSections: pickList(parsed.customSections, fromSections.customSections),
+  });
 
   return enriched;
 }
@@ -677,7 +725,7 @@ export function basicParseResumeText(text: string): ResumeContent {
   const linkedinMatch = text.match(/linkedin\.com\/in\/[\w-]+/i);
   const githubMatch = text.match(/github\.com\/[\w-]+/i);
 
-  return {
+  return finalizeProfessionalImport({
     personalInfo: {
       ...fromSections.personalInfo,
       email: emailMatch?.[0] ?? '',
@@ -696,20 +744,6 @@ export function basicParseResumeText(text: string): ResumeContent {
     publications: fromSections.publications ?? [],
     volunteer: fromSections.volunteer ?? [],
     customSections: fromSections.customSections ?? [],
-    sectionOrder: [
-      'personalInfo',
-      'summary',
-      'experience',
-      'education',
-      'skills',
-      'projects',
-      'certifications',
-      'languages',
-      'achievements',
-      'publications',
-      'volunteer',
-      'customSections',
-    ],
     hiddenSections: [],
-  };
+  });
 }

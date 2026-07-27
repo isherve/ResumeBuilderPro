@@ -180,9 +180,11 @@ export class AIService {
 }
 
 Rules:
+- Build a professional resume layout. Keep each section separate — never mix education, experience, skills, or personality content into the same field.
 - The person's full name is usually at the top — never use section titles like "PERSONALITY", "ACADEMIC RECORDS", or Roman numeral headings as firstName/lastName.
-- Academic CVs may use numbered sections (e.g. "I. PERSONALITY", "II. ACADEMIC RECORDS"). Map personality/profile text to summary, academic records/qualifications to education, work/professional experience to experience.
-- Capture ALL substantive content. Put unmatched sections in customSections rather than dropping text.
+- Academic CVs may use numbered sections (e.g. "I. PERSONALITY", "II. ACADEMIC RECORDS"). Map ONLY professional summary/profile/objective text to summary. Put personality traits in customSections. Map academic records/qualifications to education and work/professional experience to experience.
+- Do not repeat the same content in multiple fields. Each fact belongs in exactly one section.
+- Put unmatched sections in customSections with their original title rather than dropping text.
 - Create multiple experience and education entries when the CV lists several roles or degrees.
 - Generate UUIDs for all id fields. Use empty strings for missing scalar fields and empty arrays for missing lists. Preserve factual content only — do not invent details.`,
       }, {

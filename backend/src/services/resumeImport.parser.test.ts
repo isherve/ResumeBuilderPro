@@ -50,19 +50,26 @@ describe('resumeImport.parser', () => {
     expect(isBadParsedName('PERSONALITY', 'I')).toBe(true);
   });
 
-  it('maps academic CV sections into structured resume content', () => {
+  it('maps academic CV sections into separate professional fields without mixing', () => {
     const parsed = basicParseResumeText(ACADEMIC_CV);
 
     expect(parsed.personalInfo?.firstName).toBe('Emmanuel');
     expect(parsed.personalInfo?.lastName).toBe('IRADUKUNDA');
     expect(parsed.personalInfo?.phone).toContain('789871251');
-    expect(parsed.summary).toContain('Hardworking');
+    expect(parsed.summary ?? '').not.toMatch(/PERSONALITY|ACADEMIC RECORDS/i);
     expect(parsed.education?.length).toBeGreaterThanOrEqual(2);
     expect(parsed.experience?.length).toBeGreaterThanOrEqual(1);
     expect(parsed.skills?.technical?.length).toBeGreaterThanOrEqual(4);
+
+    const personalitySection = parsed.customSections?.find((section) =>
+      /personality/i.test(section.title),
+    );
+    expect(personalitySection?.items.some((item) => item.content.includes('Hardworking'))).toBe(true);
+    expect(parsed.education?.some((item) => item.degree.includes('Bachelor'))).toBe(true);
+    expect(parsed.experience?.some((item) => item.jobTitle.includes('Software Developer'))).toBe(true);
   });
 
-  it('repairs bad AI parse output using the original text', () => {
+  it('repairs bad AI parse output without mixing sections together', () => {
     const badParsed = {
       personalInfo: {
         firstName: 'PERSONALITY',
@@ -81,6 +88,11 @@ describe('resumeImport.parser', () => {
     expect(enriched.personalInfo?.lastName).toBe('IRADUKUNDA');
     expect(enriched.education?.length).toBeGreaterThanOrEqual(2);
     expect(enriched.experience?.length).toBeGreaterThanOrEqual(1);
-    expect(enriched.summary).toContain('Hardworking');
+    expect(enriched.summary ?? '').not.toMatch(/ACADEMIC RECORDS|PERSONALITY/i);
+    expect(
+      enriched.customSections?.some((section) =>
+        section.items.some((item) => item.content.includes('Hardworking')),
+      ),
+    ).toBe(true);
   });
 });

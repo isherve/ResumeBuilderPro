@@ -51,7 +51,7 @@ function CenteredLayout({ content, theme, style }: LayoutProps) {
         {personalInfo?.jobTitle && <p className="mt-1 text-gray-600">{personalInfo.jobTitle}</p>}
         <ContactRow personalInfo={personalInfo} theme={theme} className="mt-3 justify-center" />
       </header>
-      {summary && <Section title="Professional Summary" primary={primary} style={theme.sectionStyle}>{summary}</Section>}
+      {summary && <Section title="Professional Summary" primary={primary} style={theme.sectionStyle}><p className="whitespace-pre-line leading-relaxed">{summary}</p></Section>}
       {experience && experience.length > 0 && (
         <Section title="Work Experience" primary={primary} style={theme.sectionStyle}>
           {experience.map((exp) => <ExperienceBlock key={exp.id} exp={exp} primary={primary} />)}
@@ -282,6 +282,15 @@ function SkillsBlock({
   );
 }
 
+function formatSectionTitle(title: string): string {
+  const normalized = title.trim();
+  if (/^personality$/i.test(normalized)) return 'Personal Qualities';
+  if (/^academic records$/i.test(normalized)) return 'Academic Background';
+  return normalized
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function ExtraSections({
   content,
   primary,
@@ -343,9 +352,11 @@ function ExtraSections({
         </Section>
       )}
       {content.customSections?.map((section) => (
-        <Section key={section.id} title={section.title} primary={primary} style={style}>
+        <Section key={section.id} title={formatSectionTitle(section.title)} primary={primary} style={style}>
           {section.items.map((item) => (
-            <p key={item.id} className="mb-1 text-sm whitespace-pre-line">• {item.content}</p>
+            <p key={item.id} className="mb-2 text-sm whitespace-pre-line leading-relaxed last:mb-0">
+              {section.items.length > 1 ? `• ${item.content}` : item.content}
+            </p>
           ))}
         </Section>
       ))}
