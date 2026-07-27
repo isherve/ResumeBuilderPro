@@ -26,4 +26,14 @@ export const resumeService = {
 
   recordDownload: (id: string, format: string) =>
     api.post(`/resumes/${id}/download`, { format }),
+
+  import: (file: File, templateId: string, title?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('templateId', templateId);
+    if (title) formData.append('title', title);
+    return api.post<ApiResponse<Resume>>('/resumes/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };

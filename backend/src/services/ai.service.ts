@@ -154,4 +154,51 @@ export class AIService {
 
     return JSON.parse(content);
   }
+
+  static async parseResumeFromText(userId: string, rawText: string) {
+    const client = this.ensureOpenAI();
+    const trimmed = rawText.slice(0, 16000);
+
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{
+        role: 'system',
+        content: `You extract structured resume/CV data from raw text. Return ONLY valid JSON matching this shape:
+{
+  "personalInfo": { "firstName", "lastName", "email", "phone", "address", "city", "country", "website", "linkedin", "github", "portfolio", "jobTitle" },
+  "summary": "string",
+  "experience": [{ "id": "uuid", "jobTitle", "company", "location", "startDate", "endDate", "isCurrent", "responsibilities": ["..."], "achievements": ["..."] }],
+  "education": [{ "id": "uuid", "degree", "institution", "location", "startDate", "endDate", "gpa", "description" }],
+  "skills": { "technical": [{ "id": "uuid", "name", "level": 1-5 }], "soft": [{ "id": "uuid", "name", "level": 1-5 }] },
+  "projects": [{ "id": "uuid", "name", "description", "technologies": ["..."] }],
+  "certifications": [{ "id": "uuid", "name", "issuer", "issueDate" }],
+  "languages": [{ "id": "uuid", "name", "level": "native|professional|basic" }],
+  "achievements": [{ "id": "uuid", "title", "description", "date" }],
+  "publications": [{ "id": "uuid", "title", "publisher", "date", "url" }],
+  "volunteer": [{ "id": "uuid", "role", "organization", "startDate", "endDate", "description" }],
+  "customSections": [{ "id": "uuid", "title", "items": [{ "id": "uuid", "content": "..." }] }]
+}
+
+Rules:
+- The person's full name is usually at the top — never use section titles like "PERSONALITY", "ACADEMIC RECORDS", or Roman numeral headings as firstName/lastName.
+- Academic CVs may use numbered sections (e.g. "I. PERSONALITY", "II. ACADEMIC RECORDS"). Map personality/profile text to summary, academic records/qualifications to education, work/professional experience to experience.
+- Capture ALL substantive content. Put unmatched sections in customSections rather than dropping text.
+- Create multiple experience and education entries when the CV lists several roles or degrees.
+- Generate UUIDs for all id fields. Use empty strings for missing scalar fields and empty arrays for missing lists. Preserve factual content only — do not invent details.`,
+      }, {
+        role: 'user',
+        content: trimmed,
+      }],
+      max_tokens: 6000,
+      response_format: { type: 'json_object' },
+    });
+
+    const content = response.choices[0]?.message?.content || '{}';
+    await trackUsage(userId, 'parse_resume', response.usage?.total_tokens || 0, {
+      textLength: trimmed.length,
+    });
+
+    const { normalizeResumeContent } = await import('./resumeImport.service.js');
+    return normalizeResumeContent(JSON.parse(content));
+  }
 }

@@ -48,13 +48,22 @@ const defaultTheme = {
 
 const colorVariants: Record<string, Partial<typeof defaultTheme>> = {
   blue: { primaryColor: '#2563eb', accentColor: '#3b82f6' },
-  black: { primaryColor: '#1f2937', accentColor: '#374151' },
+  black: { primaryColor: '#1f2937', accentColor: '#374151', sectionStyle: 'minimal' },
   elegant: { primaryColor: '#7c3aed', accentColor: '#a78bfa', fontFamily: 'Playfair Display' },
   creative: { primaryColor: '#ec4899', accentColor: '#f472b6', headerStyle: 'sidebar' },
   corporate: { primaryColor: '#0f766e', accentColor: '#14b8a6', showPhoto: false },
-  minimal: { primaryColor: '#374151', accentColor: '#6b7280', showIcons: false, sectionStyle: 'minimal' },
+  minimal: { primaryColor: '#374151', accentColor: '#6b7280', showIcons: false, sectionStyle: 'minimal', headerStyle: 'minimal' },
   executive: { primaryColor: '#1e3a5f', accentColor: '#2563eb', fontFamily: 'Georgia' },
   developer: { primaryColor: '#059669', accentColor: '#10b981', headerStyle: 'sidebar' },
+  designer: { primaryColor: '#db2777', accentColor: '#f472b6', headerStyle: 'sidebar' },
+  marketing: { primaryColor: '#ea580c', accentColor: '#fb923c', headerStyle: 'sidebar' },
+  student: { primaryColor: '#4f46e5', accentColor: '#818cf8', sectionStyle: 'minimal', headerStyle: 'minimal' },
+  finance: { primaryColor: '#065f46', accentColor: '#059669', showPhoto: false },
+  medical: { primaryColor: '#0284c7', accentColor: '#38bdf8' },
+  legal: { primaryColor: '#1e293b', accentColor: '#475569', fontFamily: 'Georgia' },
+  'tech-startup': { primaryColor: '#7c3aed', accentColor: '#a855f7', headerStyle: 'sidebar' },
+  'ats-friendly': { primaryColor: '#374151', accentColor: '#6b7280', showIcons: false, sectionStyle: 'minimal' },
+  simple: { primaryColor: '#525252', accentColor: '#737373', sectionStyle: 'minimal', headerStyle: 'minimal' },
 };
 
 async function main() {
@@ -66,7 +75,14 @@ async function main() {
 
     await prisma.template.upsert({
       where: { slug: tmpl.slug },
-      update: {},
+      update: {
+        defaultTheme: { ...defaultTheme, ...themeOverride },
+        layout: {
+          type: themeOverride.headerStyle === 'sidebar' ? 'sidebar' : 'standard',
+          columns: 1,
+          sections: ['personalInfo', 'summary', 'experience', 'education', 'skills'],
+        },
+      },
       create: {
         name: tmpl.name,
         slug: tmpl.slug,

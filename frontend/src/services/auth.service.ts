@@ -36,7 +36,7 @@ export const authService = {
   deleteAccount: () => api.delete<ApiResponse<{ message: string }>>('/auth/account'),
 
   getGoogleAuthUrl: () => {
-    const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+    const base = import.meta.env.VITE_API_URL || '/api';
     return `${base.replace(/\/$/, '')}/auth/google`;
   },
 
@@ -44,4 +44,7 @@ export const authService = {
     api.get<ApiResponse<{ enabled: boolean; devMode?: boolean; callbackUrl?: string }>>('/auth/google/status'),
 
   devGoogleLogin: () => api.post<ApiResponse<AuthResponse>>('/auth/google/dev'),
+
+  googleTokenLogin: (credential: string) =>
+    api.post<ApiResponse<AuthResponse>>('/auth/google/token', { credential }),
 };

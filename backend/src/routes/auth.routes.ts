@@ -17,6 +17,7 @@ import { env } from '../config/env.js';
 import { isGoogleAuthEnabled, isDevGoogleAuthEnabled, getGoogleCallbackUrl } from '../config/google.js';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt.js';
 import { buildAuthResponse, findOrCreateGoogleUser, DEV_GOOGLE_PROFILE } from '../services/googleAuth.service.js';
+import { verifyGoogleCredential } from '../services/googleToken.service.js';
 import prisma from '../lib/prisma.js';
 
 const router = Router();
@@ -100,10 +101,32 @@ router.get('/google/status', (_req: Request, res: Response) => {
     data: {
       enabled: isGoogleAuthEnabled(),
       devMode: isDevGoogleAuthEnabled(),
+      clientId: isGoogleAuthEnabled() ? env.GOOGLE_CLIENT_ID : undefined,
+      authMethod: 'credential',
       callbackUrl: getGoogleCallbackUrl(),
     },
   });
 });
+
+router.post(
+  '/google/token',
+  authLimiter,
+  asyncHandler(async (req: Request, res: Response) => {
+    if (!isGoogleAuthEnabled()) {
+      throw new AppError(403, 'Google sign-in is not configured');
+    }
+
+    const credential = req.body?.credential;
+    if (!credential || typeof credential !== 'string') {
+      throw new AppError(400, 'Google credential is required');
+    }
+
+    const profile = await verifyGoogleCredential(credential);
+    const user = await findOrCreateGoogleUser(profile);
+    const result = buildAuthResponse(user as typeof user & Record<string, unknown>);
+    res.json({ success: true, data: result });
+  }),
+);
 
 router.post(
   '/google/dev',

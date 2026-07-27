@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { GoogleOAuthProvider, GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { authService } from '@/services/auth.service';
 import { useAuthStore } from '@/store';
 import { Button } from '@/components/ui/button';
@@ -31,43 +32,100 @@ export function GoogleSignInButton({ label = 'Continue with Google' }: { label?:
   const status = data?.data?.data;
   const useRealGoogle = status?.enabled ?? false;
   const useDevGoogle = status?.devMode ?? false;
+  const clientId = status?.clientId;
 
-  const handleGoogleLogin = async () => {
-    if (useRealGoogle) {
-      window.location.href = authService.getGoogleAuthUrl();
-      return;
+  const completeLogin = async (credential: string) => {
+    setLoading(true);
+    try {
+      const response = await authService.googleTokenLogin(credential);
+      const { user, accessToken, refreshToken } = response.data.data;
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
+      setUser(user);
+      toast.success('Signed in with Google');
+      navigate('/dashboard');
+    } catch {
+      toast.error('Google sign-in failed');
+    } finally {
+      setLoading(false);
     }
-
-    if (useDevGoogle) {
-      setLoading(true);
-      try {
-        const response = await authService.devGoogleLogin();
-        const { user, accessToken, refreshToken } = response.data.data;
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
-        setUser(user);
-        toast.success('Signed in with Google (local demo)');
-        navigate('/dashboard');
-      } catch {
-        toast.error('Google sign-in failed');
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
-    toast.error('Google sign-in is not available');
   };
 
+  const handleCredential = async (response: CredentialResponse) => {
+    if (!response.credential) {
+      toast.error('Google sign-in failed');
+      return;
+    }
+    await completeLogin(response.credential);
+  };
+
+  const handleDevGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      const response = await authService.devGoogleLogin();
+      const { user, accessToken, refreshToken } = response.data.data;
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
+      setUser(user);
+      toast.success('Signed in with Google (local demo)');
+      navigate('/dashboard');
+    } catch {
+      toast.error('Google sign-in failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <Button variant="outline" className="w-full" disabled loading>
+        {label}
+      </Button>
+    );
+  }
+
+  if (useRealGoogle && clientId) {
+    return (
+      <GoogleOAuthProvider clientId={clientId}>
+        <div className="w-full [&>div]:!w-full [&>div>div]:!w-full">
+          {loading ? (
+            <Button variant="outline" className="w-full" loading>
+              {label}
+            </Button>
+          ) : (
+            <GoogleLogin
+              onSuccess={handleCredential}
+              onError={() => toast.error('Google sign-in failed')}
+              useOneTap={false}
+              theme="outline"
+              size="large"
+              width="400"
+              text="continue_with"
+              shape="rectangular"
+            />
+          )}
+        </div>
+      </GoogleOAuthProvider>
+    );
+  }
+
+  if (useDevGoogle) {
+    return (
+      <Button
+        variant="outline"
+        className="w-full"
+        onClick={handleDevGoogleLogin}
+        loading={loading}
+      >
+        {!loading && <GoogleIcon />}
+        {label}
+      </Button>
+    );
+  }
+
   return (
-    <Button
-      variant="outline"
-      className="w-full"
-      onClick={handleGoogleLogin}
-      disabled={isLoading}
-      loading={loading}
-    >
-      {!loading && <GoogleIcon />}
+    <Button variant="outline" className="w-full" disabled onClick={() => toast.error('Google sign-in is not available')}>
+      <GoogleIcon />
       {label}
     </Button>
   );

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Search, Star, Copy, Trash2, MoreVertical, FileText, Plus } from 'lucide-react';
+import { Search, Star, Copy, Trash2, FileText, Plus, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { SkeletonCard } from '@/components/ui/skeleton';
+import { ImportResumeModal } from '@/components/resume/ImportResumeModal';
 import { resumeService } from '@/services/resume.service';
 import { formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -15,6 +16,7 @@ import type { Resume } from '@/types';
 export function ResumesPage() {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('newest');
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['resumes', search, sort],
@@ -57,8 +59,15 @@ export function ResumesPage() {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h1 className="text-2xl font-bold">My Resumes</h1>
-        <Button asChild><Link to="/templates"><Plus className="h-4 w-4" /> New Resume</Link></Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload className="h-4 w-4" /> Import CV
+          </Button>
+          <Button asChild><Link to="/templates"><Plus className="h-4 w-4" /> New Resume</Link></Button>
+        </div>
       </div>
+
+      <ImportResumeModal open={importOpen} onClose={() => setImportOpen(false)} />
 
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
@@ -90,8 +99,13 @@ export function ResumesPage() {
         <Card className="p-16 text-center">
           <FileText className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold mb-2">No resumes found</h3>
-          <p className="text-muted-foreground mb-6">Create your first professional resume</p>
-          <Button asChild><Link to="/templates">Browse Templates</Link></Button>
+          <p className="text-muted-foreground mb-6">Create your first professional resume or import an existing CV</p>
+          <div className="flex flex-wrap justify-center gap-3">
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4" /> Import CV
+            </Button>
+            <Button asChild><Link to="/templates">Browse Templates</Link></Button>
+          </div>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

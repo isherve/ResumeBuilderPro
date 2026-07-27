@@ -1,10 +1,29 @@
 import { Router, Request, Response } from 'express';
+import multer from 'multer';
 import { ResumeService } from '../services/resume.service.js';
 import { authenticate, getParam } from '../middleware/auth.js';
-import { asyncHandler } from '../middleware/errorHandler.js';
+import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { createResumeSchema, updateResumeSchema } from '../validators/resume.validator.js';
+import {
+  extractTextFromFile,
+  isSupportedImportFile,
+  parseImportedResume,
+} from '../services/resumeImport.service.js';
+import { uploadLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
+
+const resumeImportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (isSupportedImportFile(file.mimetype, file.originalname)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Unsupported file type. Upload PDF, Word (.doc/.docx), TXT, or JSON.'));
+    }
+  },
+});
 
 router.use(authenticate);
 
@@ -27,6 +46,46 @@ router.post(
     const data = createResumeSchema.parse(req.body);
     const resume = await ResumeService.create(req.authUser!.userId, data);
     res.status(201).json({ success: true, data: resume });
+  }),
+);
+
+router.post(
+  '/import',
+  uploadLimiter,
+  resumeImportUpload.single('file'),
+  asyncHandler(async (req: Request, res: Response) => {
+    if (!req.file) {
+      throw new AppError(400, 'No file uploaded');
+    }
+
+    const templateId = req.body?.templateId;
+    if (!templateId || typeof templateId !== 'string') {
+      throw new AppError(400, 'templateId is required');
+    }
+
+    const title =
+      typeof req.body?.title === 'string' && req.body.title.trim()
+        ? req.body.title.trim()
+        : `Imported Resume - ${req.file.originalname.replace(/\.[^.]+$/, '')}`;
+
+    const { text, isJson } = await extractTextFromFile(
+      req.file.buffer,
+      req.file.mimetype,
+      req.file.originalname,
+    );
+
+    const content = await parseImportedResume(req.authUser!.userId, text, isJson);
+    const resume = await ResumeService.create(req.authUser!.userId, {
+      title,
+      templateId,
+      content,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: resume,
+      message: 'Resume imported successfully. Please review all fields.',
+    });
   }),
 );
 

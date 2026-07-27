@@ -1,20 +1,23 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Plus, FileText, Download, TrendingUp, Sparkles, User,
-  ArrowRight, Star, Clock,
+  ArrowRight, Star, Clock, Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton, SkeletonCard } from '@/components/ui/skeleton';
+import { ImportResumeModal } from '@/components/resume/ImportResumeModal';
 import { dashboardService } from '@/services/template.service';
 import { formatDate } from '@/lib/utils';
 import type { DashboardData, Resume, Activity } from '@/types';
 
 export function DashboardPage() {
+  const [importOpen, setImportOpen] = useState(false);
   const { data, isLoading } = useQuery<{ data: { data: DashboardData } }>({
     queryKey: ['dashboard'],
     queryFn: () => dashboardService.getDashboard(),
@@ -51,10 +54,17 @@ export function DashboardPage() {
           </h1>
           <p className="text-muted-foreground mt-1">Here&apos;s an overview of your resume activity.</p>
         </div>
-        <Button asChild size="lg">
-          <Link to="/templates"><Plus className="h-5 w-5" /> Create Resume</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload className="h-5 w-5" /> Import CV
+          </Button>
+          <Button asChild size="lg">
+            <Link to="/templates"><Plus className="h-5 w-5" /> Create Resume</Link>
+          </Button>
+        </div>
       </div>
+
+      <ImportResumeModal open={importOpen} onClose={() => setImportOpen(false)} />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
+import multer from 'multer';
 
 export class AppError extends Error {
   constructor(
@@ -35,6 +36,22 @@ export const errorHandler = (
         field: e.path.join('.'),
         message: e.message,
       })),
+    });
+    return;
+  }
+
+  if (err instanceof multer.MulterError) {
+    res.status(400).json({
+      success: false,
+      message: err.code === 'LIMIT_FILE_SIZE' ? 'File is too large (max 10MB)' : err.message,
+    });
+    return;
+  }
+
+  if (err.message?.includes('Unsupported file type')) {
+    res.status(400).json({
+      success: false,
+      message: err.message,
     });
     return;
   }

@@ -17,7 +17,7 @@ import { SummaryEditor } from '@/components/resume/editors/SummaryEditor';
 import { useBuilderStore } from '@/store';
 import { resumeService } from '@/services/resume.service';
 import { useAutosave } from '@/hooks/useAutosave';
-import { exportToPDF, exportToJSON } from '@/utils/export';
+import { exportToPDF, exportToJSON, printResume } from '@/utils/export';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -26,6 +26,7 @@ export function BuilderPage() {
   const [zoom, setZoom] = useState(0.6);
   const [activeSection, setActiveSection] = useState('personalInfo');
   const [title, setTitle] = useState('');
+  const [templateLayout, setTemplateLayout] = useState<Record<string, unknown>>({});
   const {
     content, theme, setContent, setTheme, updateContent,
     undo, redo, undoStack, redoStack, isSaving, reset,
@@ -45,6 +46,7 @@ export function BuilderPage() {
       setContent(resume.content);
       setTheme(resume.theme);
       setTitle(resume.title);
+      setTemplateLayout(resume.template?.layout ?? {});
     }
     return () => reset();
   }, [data, setContent, setTheme, reset]);
@@ -69,7 +71,12 @@ export function BuilderPage() {
       if (id) await resumeService.recordDownload(id, 'PDF');
       toast.success('PDF exported');
     } catch {
-      toast.error('Export failed');
+      try {
+        printResume('resume-preview');
+        toast.success('Opening print dialog — choose "Save as PDF"');
+      } catch {
+        toast.error('Export failed. Try allowing pop-ups, then click PDF again.');
+      }
     }
   };
 
@@ -198,7 +205,7 @@ export function BuilderPage() {
         {/* Preview Panel */}
         <div className="hidden lg:flex flex-1 bg-muted/30 overflow-auto justify-center p-8" id="resume-preview-container">
           <div id="resume-preview">
-            <ResumePreview content={content} theme={theme} zoom={zoom} />
+            <ResumePreview content={content} theme={theme} zoom={zoom} layout={templateLayout} />
           </div>
         </div>
       </div>
