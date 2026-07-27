@@ -36,4 +36,12 @@ export const resumeService = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+
+  importIntoExisting: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post<ApiResponse<Resume>>(`/resumes/${id}/import`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };

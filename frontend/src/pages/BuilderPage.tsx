@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Save, Download, Undo, Redo, ZoomIn, ZoomOut, Maximize,
-  Share2, Palette,
+  Share2, Palette, Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import { ExperienceEditor } from '@/components/resume/editors/ExperienceEditor';
 import { EducationEditor } from '@/components/resume/editors/EducationEditor';
 import { SkillsEditor } from '@/components/resume/editors/SkillsEditor';
 import { SummaryEditor } from '@/components/resume/editors/SummaryEditor';
+import { ImportResumeModal } from '@/components/resume/ImportResumeModal';
 import { useBuilderStore } from '@/store';
 import { resumeService } from '@/services/resume.service';
 import { useAutosave } from '@/hooks/useAutosave';
@@ -26,6 +27,7 @@ export function BuilderPage() {
   const [zoom, setZoom] = useState(0.6);
   const [activeSection, setActiveSection] = useState('personalInfo');
   const [title, setTitle] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
   const [templateLayout, setTemplateLayout] = useState<Record<string, unknown>>({});
   const {
     content, theme, setContent, setTheme, updateContent,
@@ -145,6 +147,9 @@ export function BuilderPage() {
           <Maximize className="h-4 w-4" />
         </Button>
 
+        <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+          <Upload className="h-4 w-4" /> Import CV
+        </Button>
         <Button variant="outline" size="sm" onClick={handleSave}><Save className="h-4 w-4" /> Save</Button>
         <Button variant="outline" size="sm" onClick={handleShare}><Share2 className="h-4 w-4" /> Share</Button>
         <Button variant="outline" size="sm" onClick={handleExportJSON}><Download className="h-4 w-4" /> JSON</Button>
@@ -169,6 +174,16 @@ export function BuilderPage() {
           </div>
 
           <div className="p-4">
+            <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
+              <p className="text-sm font-medium">Have a CV or document about you?</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Import PDF or Word to fill this template with your details. Sections stay separate.
+              </p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => setImportOpen(true)}>
+                <Upload className="h-4 w-4" /> Import document
+              </Button>
+            </div>
+
             {activeSection === 'personalInfo' && <PersonalInfoEditor content={content} updateContent={updateContent} />}
             {activeSection === 'summary' && <SummaryEditor content={content} updateContent={updateContent} />}
             {activeSection === 'experience' && <ExperienceEditor content={content} updateContent={updateContent} />}
@@ -209,6 +224,17 @@ export function BuilderPage() {
           </div>
         </div>
       </div>
+
+      <ImportResumeModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        resumeId={id}
+        resumeTitle={title}
+        onImported={(resume) => {
+          setContent(resume.content);
+          if (resume.title) setTitle(resume.title);
+        }}
+      />
     </div>
   );
 }

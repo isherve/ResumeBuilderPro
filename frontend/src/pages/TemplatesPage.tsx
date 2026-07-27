@@ -21,6 +21,7 @@ import { templateService } from '@/services/template.service';
 import { resumeService } from '@/services/resume.service';
 import { useAuthStore } from '@/store';
 import { buildStarterContent } from '@/data/sampleResumeContent';
+import { unwrapApiData } from '@/lib/apiHelpers';
 import { toast } from 'sonner';
 import type { Template } from '@/types';
 
@@ -35,18 +36,20 @@ export function TemplatesPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
-  const { data: templatesData, isLoading } = useQuery({
+  const { data: templates = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['templates', search, category],
-    queryFn: () => templateService.getAll({ search, category: category || undefined }),
+    queryFn: async () =>
+      unwrapApiData(
+        await templateService.getAll({ search, category: category || undefined }),
+        [] as Template[],
+      ),
   });
 
-  const { data: categoriesData } = useQuery({
+  const { data: categories = [] } = useQuery({
     queryKey: ['template-categories'],
-    queryFn: () => templateService.getCategories(),
+    queryFn: async () =>
+      unwrapApiData(await templateService.getCategories(), [] as { name: string; count: number }[]),
   });
-
-  const templates = templatesData?.data?.data || [];
-  const categories = categoriesData?.data?.data || [];
 
   const sortedTemplates = useMemo(() => {
     const list = [...templates];
@@ -62,7 +65,7 @@ export function TemplatesPage() {
   );
 
   const featuredIds = new Set(featuredTemplates.map((template) => template.id));
-  const showFeatured = !search && !category && featuredTemplates.length >= 4;
+  const showFeatured = !search && !category && featuredTemplates.length >= 2;
 
   const handleUseTemplate = async (template: Template) => {
     setCreating(template.id);
@@ -206,6 +209,13 @@ export function TemplatesPage() {
             {Array.from({ length: 8 }).map((_, index) => (
               <SkeletonCard key={index} />
             ))}
+          </div>
+        ) : isError ? (
+          <div className="rounded-2xl border border-dashed p-12 text-center">
+            <LayoutTemplate className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+            <h3 className="text-lg font-semibold">Could not load templates</h3>
+            <p className="mt-2 text-muted-foreground">Check your connection and try again.</p>
+            <Button className="mt-4" onClick={() => refetch()}>Retry</Button>
           </div>
         ) : (
           <>

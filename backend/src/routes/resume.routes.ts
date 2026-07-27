@@ -89,6 +89,35 @@ router.post(
   }),
 );
 
+router.post(
+  '/:id/import',
+  uploadLimiter,
+  resumeImportUpload.single('file'),
+  asyncHandler(async (req: Request, res: Response) => {
+    if (!req.file) {
+      throw new AppError(400, 'No file uploaded');
+    }
+
+    const resumeId = getParam(req.params.id);
+    await ResumeService.findById(req.authUser!.userId, resumeId);
+
+    const { text, isJson } = await extractTextFromFile(
+      req.file.buffer,
+      req.file.mimetype,
+      req.file.originalname,
+    );
+
+    const content = await parseImportedResume(req.authUser!.userId, text, isJson);
+    const resume = await ResumeService.update(req.authUser!.userId, resumeId, { content });
+
+    res.json({
+      success: true,
+      data: resume,
+      message: 'Your document was imported into this resume. Review each section before exporting.',
+    });
+  }),
+);
+
 router.get(
   '/:id',
   asyncHandler(async (req: Request, res: Response) => {

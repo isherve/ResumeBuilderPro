@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Upload, FileText, X, Loader2 } from 'lucide-react';
+import { Upload, FileText, X, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { templateService } from '@/services/template.service';
 import { resumeService } from '@/services/resume.service';
+import { unwrapApiData } from '@/lib/apiHelpers';
 import { toast } from 'sonner';
-import type { Template } from '@/types';
+import type { Resume, Template } from '@/types';
 
 const ACCEPTED_TYPES = '.pdf,.doc,.docx,.txt,.json';
 const ACCEPTED_LABEL = 'PDF, Word (.doc / .docx), TXT, or JSON';
@@ -16,9 +17,19 @@ const ACCEPTED_LABEL = 'PDF, Word (.doc / .docx), TXT, or JSON';
 interface ImportResumeModalProps {
   open: boolean;
   onClose: () => void;
+  /** When set, import fills this resume and keeps its current template */
+  resumeId?: string;
+  resumeTitle?: string;
+  onImported?: (resume: Resume) => void;
 }
 
-export function ImportResumeModal({ open, onClose }: ImportResumeModalProps) {
+export function ImportResumeModal({
+  open,
+  onClose,
+  resumeId,
+  resumeTitle,
+  onImported,
+}: ImportResumeModalProps) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -26,32 +37,34 @@ export function ImportResumeModal({ open, onClose }: ImportResumeModalProps) {
   const [templateId, setTemplateId] = useState('');
   const [step, setStep] = useState<'idle' | 'extracting' | 'parsing' | 'creating'>('idle');
   const [dragOver, setDragOver] = useState(false);
+  const isExistingResume = Boolean(resumeId);
 
-  const { data: templatesData, isLoading: templatesLoading } = useQuery({
+  const {
+    data: templates = [],
+    isLoading: templatesLoading,
+    isError: templatesError,
+    refetch: refetchTemplates,
+  } = useQuery({
     queryKey: ['templates-import'],
-    queryFn: () => templateService.getAll({}),
-    enabled: open,
+    queryFn: async () => unwrapApiData(await templateService.getAll({}), [] as Template[]),
+    enabled: open && !isExistingResume,
   });
 
-  const templates = templatesData?.data?.data || [];
   const professionalTemplate = templates.find(
-    (template: Template) =>
-      template.slug === 'professional' || template.name.toLowerCase() === 'professional',
+    (template) => template.slug === 'professional' || template.name.toLowerCase() === 'professional',
   );
   const selectedTemplate =
-    templates.find((template: Template) => template.id === templateId) ??
-    professionalTemplate ??
-    templates[0];
+    templates.find((template) => template.id === templateId) ?? professionalTemplate ?? templates[0];
 
   useEffect(() => {
-    if (!open || templateId || templates.length === 0) return;
+    if (!open || isExistingResume || templateId || templates.length === 0) return;
     setTemplateId(professionalTemplate?.id ?? templates[0]?.id ?? '');
-  }, [open, templateId, templates, professionalTemplate?.id]);
+  }, [open, isExistingResume, templateId, templates, professionalTemplate?.id]);
 
   const reset = () => {
     setFile(null);
     setTitle('');
-    setTemplateId('');
+    if (!isExistingResume) setTemplateId('');
     setStep('idle');
     setDragOver(false);
   };
@@ -71,7 +84,7 @@ export function ImportResumeModal({ open, onClose }: ImportResumeModalProps) {
       return;
     }
     setFile(nextFile);
-    if (!title) {
+    if (!title && !isExistingResume) {
       setTitle(nextFile.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '));
     }
   };
@@ -80,7 +93,7 @@ export function ImportResumeModal({ open, onClose }: ImportResumeModalProps) {
     event.preventDefault();
     setDragOver(false);
     pickFile(event.dataTransfer.files?.[0] ?? null);
-  }, [title]);
+  }, []);
 
   const handleImport = async () => {
     if (!file) {
@@ -88,24 +101,41 @@ export function ImportResumeModal({ open, onClose }: ImportResumeModalProps) {
       return;
     }
 
+    if (isExistingResume && resumeId) {
+      try {
+        setStep('extracting');
+        setStep('parsing');
+        const response = await resumeService.importIntoExisting(resumeId, file);
+        const resume = unwrapApiData(response, null as unknown as Resume);
+        setStep('creating');
+        toast.success('Your document was imported into this resume.');
+        onImported?.(resume);
+        reset();
+        onClose();
+      } catch (error: unknown) {
+        const message = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
+        toast.error(message || 'Failed to import document');
+        setStep('idle');
+      }
+      return;
+    }
+
     const chosenTemplateId = templateId || templates[0]?.id;
     if (!chosenTemplateId) {
-      toast.error('Select a template');
+      toast.error('No templates available. Please try again in a moment.');
       return;
     }
 
     try {
       setStep('extracting');
-      await new Promise((resolve) => setTimeout(resolve, 300));
       setStep('parsing');
-
-      const { data } = await resumeService.import(file, chosenTemplateId, title || undefined);
-
+      const response = await resumeService.import(file, chosenTemplateId, title || undefined);
+      const resume = unwrapApiData(response, null as unknown as Resume);
       setStep('creating');
       toast.success('Resume imported! Review the fields in the builder.');
       reset();
       onClose();
-      navigate(`/builder/${data.data.id}`);
+      navigate(`/builder/${resume.id}`);
     } catch (error: unknown) {
       const message = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast.error(message || 'Failed to import resume');
@@ -122,7 +152,9 @@ export function ImportResumeModal({ open, onClose }: ImportResumeModalProps) {
       : step === 'parsing'
         ? 'Extracting resume information...'
         : step === 'creating'
-          ? 'Creating your resume...'
+          ? isExistingResume
+            ? 'Updating your resume...'
+            : 'Creating your resume...'
           : '';
 
   return (
@@ -138,9 +170,13 @@ export function ImportResumeModal({ open, onClose }: ImportResumeModalProps) {
           >
             <X className="h-4 w-4" />
           </button>
-          <CardTitle>Import existing CV / Resume</CardTitle>
+          <CardTitle>
+            {isExistingResume ? 'Import your document' : 'Import existing CV / Resume'}
+          </CardTitle>
           <CardDescription>
-            Upload your CV and we&apos;ll place each section in the right field on a professional layout.
+            {isExistingResume
+              ? `Upload a PDF or Word file to fill "${resumeTitle || 'this resume'}" with your real details. Your chosen template stays the same.`
+              : 'Upload your CV and we will place each section in the right field on a professional layout.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -176,10 +212,15 @@ export function ImportResumeModal({ open, onClose }: ImportResumeModalProps) {
                   <p className="text-sm text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</p>
                 </div>
                 {!loading && (
-                  <Button type="button" variant="outline" size="sm" onClick={(event) => {
-                    event.stopPropagation();
-                    setFile(null);
-                  }}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setFile(null);
+                    }}
+                  >
                     Choose another file
                   </Button>
                 )}
@@ -195,29 +236,52 @@ export function ImportResumeModal({ open, onClose }: ImportResumeModalProps) {
             )}
           </div>
 
-          <Input
-            label="Resume title"
-            placeholder="My Imported Resume"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            disabled={loading}
-          />
+          {!isExistingResume && (
+            <>
+              <Input
+                label="Resume title"
+                placeholder="My Imported Resume"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                disabled={loading}
+              />
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Template layout</label>
-            <select
-              value={templateId || selectedTemplate?.id || ''}
-              onChange={(event) => setTemplateId(event.target.value)}
-              disabled={loading || templatesLoading}
-              className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm"
-            >
-              {templates.map((template: Template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
-          </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Template layout</label>
+                {templatesError ? (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
+                    <p className="flex items-center gap-2 text-destructive">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      Could not load templates.
+                    </p>
+                    <Button variant="outline" size="sm" className="mt-2" onClick={() => refetchTemplates()}>
+                      Retry
+                    </Button>
+                  </div>
+                ) : (
+                  <select
+                    value={templateId || selectedTemplate?.id || ''}
+                    onChange={(event) => setTemplateId(event.target.value)}
+                    disabled={loading || templatesLoading}
+                    className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm"
+                  >
+                    {templatesLoading && <option value="">Loading templates...</option>}
+                    {!templatesLoading && templates.length === 0 && (
+                      <option value="">No templates available</option>
+                    )}
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name} — {template.category}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {!templatesLoading && templates.length > 0 && (
+                  <p className="text-xs text-muted-foreground">{templates.length} templates available</p>
+                )}
+              </div>
+            </>
+          )}
 
           {loading && (
             <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
@@ -234,8 +298,16 @@ export function ImportResumeModal({ open, onClose }: ImportResumeModalProps) {
             <Button variant="outline" className="flex-1" onClick={handleClose} disabled={loading}>
               Cancel
             </Button>
-            <Button className="flex-1" onClick={handleImport} loading={loading} disabled={!file || templatesLoading}>
-              Import &amp; Edit
+            <Button
+              className="flex-1"
+              onClick={handleImport}
+              loading={loading}
+              disabled={
+                !file ||
+                (!isExistingResume && (templatesLoading || templates.length === 0))
+              }
+            >
+              {isExistingResume ? 'Import into resume' : 'Import & Edit'}
             </Button>
           </div>
         </CardContent>

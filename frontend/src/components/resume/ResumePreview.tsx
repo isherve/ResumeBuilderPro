@@ -2,6 +2,14 @@ import type { ResumeContent, ResumeTheme } from '@/types';
 import { Mail, Phone, MapPin, Globe, Link2 } from 'lucide-react';
 import { getLayoutType } from '@/data/sampleResumeContent';
 
+function getPadding(theme: ResumeTheme, fallback = 40): number {
+  const margins = theme.margins;
+  if (margins && typeof margins === 'object' && typeof margins.top === 'number') {
+    return margins.top;
+  }
+  return fallback;
+}
+
 interface ResumePreviewProps {
   content: ResumeContent;
   theme: ResumeTheme;
@@ -39,7 +47,7 @@ function CenteredLayout({ content, theme, style }: LayoutProps) {
   const primary = theme.primaryColor || '#6366f1';
   const { personalInfo, summary, experience, education, skills } = content;
   const fullName = [personalInfo?.firstName, personalInfo?.lastName].filter(Boolean).join(' ') || 'Your Name';
-  const padding = theme.margins?.top ?? 40;
+  const padding = getPadding(theme, 40);
 
   return (
     <div className="bg-white text-gray-900 shadow-lg mx-auto" style={{ ...style, padding }}>
@@ -124,7 +132,7 @@ function MinimalLayout({ content, theme, style }: LayoutProps) {
   const primary = theme.primaryColor || '#374151';
   const { personalInfo, summary, experience, education, skills } = content;
   const fullName = [personalInfo?.firstName, personalInfo?.lastName].filter(Boolean).join(' ') || 'Your Name';
-  const padding = theme.margins?.top ?? 48;
+  const padding = getPadding(theme, 48);
 
   return (
     <div className="bg-white text-gray-900 shadow-lg mx-auto" style={{ ...style, padding }}>
