@@ -19,21 +19,9 @@ import {
   extractTextFromImageWithOcr,
   extractTextFromPdfWithOcr,
 } from './pdfOcr.service.js';
+import { IMPORT_FORMATS_SHORT } from '../constants/importFormats.js';
 
-const SUPPORTED_EXTENSIONS = ['.pdf', '.txt', '.json', '.docx', '.doc', '.png', '.jpg', '.jpeg', '.webp'];
-
-export function isSupportedImportFile(mimetype: string, filename: string): boolean {
-  const ext = filename.toLowerCase();
-  return (
-    SUPPORTED_EXTENSIONS.some((suffix) => ext.endsWith(suffix)) ||
-    mimetype === 'application/pdf' ||
-    mimetype === 'text/plain' ||
-    mimetype === 'application/json' ||
-    mimetype === 'application/msword' ||
-    mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-    mimetype.startsWith('image/')
-  );
-}
+export { isSupportedImportFile } from '../constants/importFormats.js';
 
 async function extractPdfWithPdfParse(buffer: Buffer): Promise<string> {
   const { createRequire } = await import('module');
@@ -110,18 +98,21 @@ export async function extractTextFromFile(
     if (!text) {
       throw new AppError(
         400,
-        'Could not read this PDF. If it is a scan, try uploading a JPG/PNG photo of your CV, a Word (.docx) file, or re-export the PDF with selectable text.',
+        `Could not read this PDF. Supported formats: ${IMPORT_FORMATS_SHORT}. For scans, OCR runs automatically — try a clearer file or another format.`,
       );
     }
     return { text, isJson: false };
   }
 
-  if (mimetype.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(ext)) {
+  if (
+    mimetype.startsWith('image/') ||
+    /\.(png|jpe?g|webp|gif|bmp|tiff?)$/i.test(ext)
+  ) {
     const text = await extractTextFromImageWithOcr(buffer);
     if (!text) {
       throw new AppError(
         400,
-        'Could not read text from this image. Use a clear, well-lit photo or upload a Word (.docx) file instead.',
+        `Could not read text from this image. Supported formats: ${IMPORT_FORMATS_SHORT}. Use a clear, well-lit photo.`,
       );
     }
     return { text, isJson: false };
@@ -147,7 +138,7 @@ export async function extractTextFromFile(
     return { text, isJson: false };
   }
 
-  throw new AppError(400, 'Unsupported file type. Upload PDF, Word (.doc/.docx), TXT, or JSON.');
+  throw new AppError(400, `Unsupported file type. Supported formats: ${IMPORT_FORMATS_SHORT}.`);
 }
 
 function ensureId<T extends Record<string, unknown>>(item: T): T & { id: string } {
@@ -226,7 +217,7 @@ function parseJsonResume(text: string): ResumeContent {
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new AppError(400, 'Invalid JSON file. Export a resume as JSON or upload PDF/DOCX/TXT.');
+    throw new AppError(400, `Invalid JSON file. Supported formats: ${IMPORT_FORMATS_SHORT}.`);
   }
 
   const content =
@@ -261,7 +252,7 @@ function ensureImportHasContent(rawText: string, content: ResumeContent): Resume
   if (trimmed.length < 20) {
     throw new AppError(
       400,
-      'Could not read enough text from this file. Try Word (.docx), a text-based PDF, or a clear JPG/PNG photo.',
+      `Could not read enough text from this file. Supported formats: ${IMPORT_FORMATS_SHORT}.`,
     );
   }
 

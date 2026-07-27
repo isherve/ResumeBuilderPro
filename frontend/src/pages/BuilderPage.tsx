@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { unwrapApiData } from '@/lib/apiHelpers';
 import { hasImportedContent } from '@/lib/resumeContent';
+import { IMPORT_FORMATS_LABEL } from '@/lib/importFormats';
 import type { Resume, ResumeContent } from '@/types';
 
 export function BuilderPage() {
@@ -182,7 +183,7 @@ export function BuilderPage() {
             <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
               <p className="text-sm font-medium">Have a CV or document about you?</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Import PDF or Word to fill this template with your details. Sections stay separate.
+                Upload any supported file: {IMPORT_FORMATS_LABEL}
               </p>
               <Button variant="outline" size="sm" className="mt-3" onClick={() => setImportOpen(true)}>
                 <Upload className="h-4 w-4" /> Import document
@@ -238,7 +239,7 @@ export function BuilderPage() {
         onImported={(resume) => {
           cancelSave();
           if (!resume?.content || !hasImportedContent(resume.content)) {
-            toast.error('Import completed but no readable content was found. Try a Word (.docx) file.');
+            toast.error(`Import could not read enough content. Supported formats: ${IMPORT_FORMATS_LABEL}`);
             return;
           }
           applyImportedContent(resume.content);

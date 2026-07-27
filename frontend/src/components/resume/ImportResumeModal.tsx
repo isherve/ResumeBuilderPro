@@ -9,11 +9,14 @@ import { templateService } from '@/services/template.service';
 import { resumeService } from '@/services/resume.service';
 import { unwrapApiData } from '@/lib/apiHelpers';
 import { countImportedSections, hasImportedContent } from '@/lib/resumeContent';
+import {
+  IMPORT_ACCEPT_ATTR,
+  IMPORT_FORMAT_CHIPS,
+  IMPORT_FORMATS_LABEL,
+  isAcceptedImportFile,
+} from '@/lib/importFormats';
 import { toast } from 'sonner';
 import type { Resume, Template } from '@/types';
-
-const ACCEPTED_TYPES = '.pdf,.doc,.docx,.txt,.json,.png,.jpg,.jpeg,.webp';
-const ACCEPTED_LABEL = 'PDF, Word (.doc / .docx), TXT, JSON, or image (JPG/PNG)';
 
 interface ImportResumeModalProps {
   open: boolean;
@@ -79,11 +82,9 @@ export function ImportResumeModal({
   const pickFile = (nextFile: File | null) => {
     if (!nextFile) return;
     const name = nextFile.name.toLowerCase();
-    const valid = ['.pdf', '.doc', '.docx', '.txt', '.json', '.png', '.jpg', '.jpeg', '.webp'].some((ext) =>
-      name.endsWith(ext),
-    );
+    const valid = isAcceptedImportFile(name);
     if (!valid) {
-      toast.error(`Unsupported file type. Upload ${ACCEPTED_LABEL}.`);
+      toast.error(`Unsupported file type. Supported: ${IMPORT_FORMATS_LABEL}`);
       return;
     }
     setFile(nextFile);
@@ -113,7 +114,7 @@ export function ImportResumeModal({
         setStep('creating');
 
         if (!resume?.content || !hasImportedContent(resume.content)) {
-          toast.error('Could not read enough text from this file. Try Word (.docx) or a clearer PDF/photo.');
+          toast.error(`Import could not read enough text. Try another supported format (${IMPORT_FORMATS_LABEL}).`);
           setStep('idle');
           return;
         }
@@ -215,7 +216,7 @@ export function ImportResumeModal({
             <input
               ref={inputRef}
               type="file"
-              accept={ACCEPTED_TYPES}
+              accept={IMPORT_ACCEPT_ATTR}
               className="hidden"
               onChange={(event) => pickFile(event.target.files?.[0] ?? null)}
             />
@@ -245,7 +246,17 @@ export function ImportResumeModal({
                 <Upload className="h-10 w-10 text-muted-foreground" />
                 <div>
                   <p className="font-medium">Drop your file here or click to browse</p>
-                  <p className="text-sm text-muted-foreground mt-1">{ACCEPTED_LABEL}</p>
+                  <p className="text-sm text-muted-foreground mt-1">All supported formats:</p>
+                  <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+                    {IMPORT_FORMAT_CHIPS.map((format) => (
+                      <span
+                        key={format}
+                        className="rounded-md bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                      >
+                        {format}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </>
             )}
@@ -306,7 +317,7 @@ export function ImportResumeModal({
           )}
 
           <p className="text-xs text-muted-foreground">
-            Scanned PDFs and photos are supported (OCR). Word (.docx) gives the best results. Each section stays separate.
+            All formats supported — PDF, Word, TXT, JSON, and images. Scanned PDFs use OCR automatically.
           </p>
 
           <div className="flex gap-3 pt-2">

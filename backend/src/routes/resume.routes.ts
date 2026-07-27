@@ -6,12 +6,12 @@ import { asyncHandler, AppError } from '../middleware/errorHandler.js';
 import { createResumeSchema, updateResumeSchema } from '../validators/resume.validator.js';
 import {
   extractTextFromFile,
-  isSupportedImportFile,
   parseImportedResume,
   applyUserProfileToImport,
 } from '../services/resumeImport.service.js';
 import prisma from '../lib/prisma.js';
 import { uploadLimiter } from '../middleware/rateLimiter.js';
+import { IMPORT_FORMATS_SHORT, isSupportedImportFile } from '../constants/importFormats.js';
 
 const router = Router();
 
@@ -22,7 +22,7 @@ const resumeImportUpload = multer({
     if (isSupportedImportFile(file.mimetype, file.originalname)) {
       cb(null, true);
     } else {
-      cb(new Error('Unsupported file type. Upload PDF, Word (.doc/.docx), TXT, or JSON.'));
+      cb(new Error(`Unsupported file type. Supported formats: ${IMPORT_FORMATS_SHORT}.`));
     }
   },
 });
