@@ -11,8 +11,8 @@ import { unwrapApiData } from '@/lib/apiHelpers';
 import { toast } from 'sonner';
 import type { Resume, Template } from '@/types';
 
-const ACCEPTED_TYPES = '.pdf,.doc,.docx,.txt,.json';
-const ACCEPTED_LABEL = 'PDF, Word (.doc / .docx), TXT, or JSON';
+const ACCEPTED_TYPES = '.pdf,.doc,.docx,.txt,.json,.png,.jpg,.jpeg,.webp';
+const ACCEPTED_LABEL = 'PDF, Word (.doc / .docx), TXT, JSON, or image (JPG/PNG)';
 
 interface ImportResumeModalProps {
   open: boolean;
@@ -78,7 +78,9 @@ export function ImportResumeModal({
   const pickFile = (nextFile: File | null) => {
     if (!nextFile) return;
     const name = nextFile.name.toLowerCase();
-    const valid = ['.pdf', '.doc', '.docx', '.txt', '.json'].some((ext) => name.endsWith(ext));
+    const valid = ['.pdf', '.doc', '.docx', '.txt', '.json', '.png', '.jpg', '.jpeg', '.webp'].some((ext) =>
+      name.endsWith(ext),
+    );
     if (!valid) {
       toast.error(`Unsupported file type. Upload ${ACCEPTED_LABEL}.`);
       return;
@@ -148,7 +150,7 @@ export function ImportResumeModal({
   const loading = step !== 'idle';
   const statusText =
     step === 'extracting'
-      ? 'Reading your file...'
+      ? 'Reading your file (OCR may take a moment for scanned PDFs)...'
       : step === 'parsing'
         ? 'Extracting resume information...'
         : step === 'creating'
@@ -291,7 +293,7 @@ export function ImportResumeModal({
           )}
 
           <p className="text-xs text-muted-foreground">
-            Each section stays separate — experience, education, skills, and other blocks are not mixed together.
+            Scanned PDFs and photos are supported (OCR). Word (.docx) gives the best results. Each section stays separate.
           </p>
 
           <div className="flex gap-3 pt-2">

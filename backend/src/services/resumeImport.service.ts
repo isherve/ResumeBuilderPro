@@ -13,8 +13,12 @@ import {
   basicParseResumeText,
   enrichImportedContent,
 } from './resumeImport.parser.js';
+import {
+  extractTextFromImageWithOcr,
+  extractTextFromPdfWithOcr,
+} from './pdfOcr.service.js';
 
-const SUPPORTED_EXTENSIONS = ['.pdf', '.txt', '.json', '.docx', '.doc'];
+const SUPPORTED_EXTENSIONS = ['.pdf', '.txt', '.json', '.docx', '.doc', '.png', '.jpg', '.jpeg', '.webp'];
 
 export function isSupportedImportFile(mimetype: string, filename: string): boolean {
   const ext = filename.toLowerCase();
@@ -24,7 +28,8 @@ export function isSupportedImportFile(mimetype: string, filename: string): boole
     mimetype === 'text/plain' ||
     mimetype === 'application/json' ||
     mimetype === 'application/msword' ||
-    mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    mimetype.startsWith('image/')
   );
 }
 
@@ -59,6 +64,13 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
     } catch (error) {
       console.error('PDF extraction attempt failed:', error);
     }
+  }
+
+  try {
+    const ocrText = await extractTextFromPdfWithOcr(buffer);
+    if (ocrText.length > 20) return ocrText;
+  } catch (error) {
+    console.error('PDF OCR extraction failed:', error);
   }
 
   return '';
@@ -96,7 +108,18 @@ export async function extractTextFromFile(
     if (!text) {
       throw new AppError(
         400,
-        'This PDF has no readable text (it may be scanned). Re-save it as a Word (.docx) file and upload that, or use a text-based PDF.',
+        'Could not read this PDF. If it is a scan, try uploading a JPG/PNG photo of your CV, a Word (.docx) file, or re-export the PDF with selectable text.',
+      );
+    }
+    return { text, isJson: false };
+  }
+
+  if (mimetype.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(ext)) {
+    const text = await extractTextFromImageWithOcr(buffer);
+    if (!text) {
+      throw new AppError(
+        400,
+        'Could not read text from this image. Use a clear, well-lit photo or upload a Word (.docx) file instead.',
       );
     }
     return { text, isJson: false };
