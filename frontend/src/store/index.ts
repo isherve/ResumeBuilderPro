@@ -61,6 +61,8 @@ interface BuilderState {
   undoStack: ResumeContent[];
   redoStack: ResumeContent[];
   setContent: (content: ResumeContent) => void;
+  loadContent: (content: ResumeContent) => void;
+  applyImportedContent: (content: ResumeContent) => void;
   updateContent: (updater: (prev: ResumeContent) => ResumeContent) => void;
   setTheme: (theme: ResumeTheme) => void;
   setDirty: (dirty: boolean) => void;
@@ -104,6 +106,22 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   undoStack: [],
   redoStack: [],
   setContent: (content) => set({ content, isDirty: true }),
+  loadContent: (content) =>
+    set({
+      content: content ?? defaultContent,
+      isDirty: false,
+      isSaving: false,
+      undoStack: [],
+      redoStack: [],
+    }),
+  applyImportedContent: (content) =>
+    set({
+      content: content ?? defaultContent,
+      isDirty: true,
+      isSaving: false,
+      undoStack: [],
+      redoStack: [],
+    }),
   updateContent: (updater) => {
     const prev = get().content;
     set((state) => ({

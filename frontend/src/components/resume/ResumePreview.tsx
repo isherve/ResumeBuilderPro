@@ -103,7 +103,10 @@ function SidebarLayout({ content, theme, style }: LayoutProps) {
           <div className="mt-8">
             <h3 className="mb-3 text-xs font-bold uppercase tracking-wider">Skills</h3>
             <div className="flex flex-wrap gap-1.5">
-              {[...(skills.technical ?? []), ...(skills.soft ?? [])].slice(0, 12).map((s) => (
+              {[...(skills.technical ?? []), ...(skills.soft ?? [])]
+                .filter((s) => s.name?.trim() && s.name.trim().length > 1)
+                .slice(0, 12)
+                .map((s) => (
                 <span key={s.id} className="rounded bg-white/20 px-2 py-0.5 text-[10px]">{s.name}</span>
               ))}
             </div>

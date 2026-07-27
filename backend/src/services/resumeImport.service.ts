@@ -12,6 +12,8 @@ import { env } from '../config/env.js';
 import {
   basicParseResumeText,
   enrichImportedContent,
+  finalizeProfessionalImport,
+  isBadParsedName,
 } from './resumeImport.parser.js';
 import {
   extractTextFromImageWithOcr,
@@ -238,6 +240,64 @@ function parseJsonResume(text: string): ResumeContent {
   return normalizeResumeContent(content);
 }
 
+function hasMeaningfulImportContent(content: ResumeContent): boolean {
+  const personal = content.personalInfo;
+  if (personal?.firstName?.trim() || personal?.lastName?.trim()) return true;
+  if (personal?.email?.trim() || personal?.phone?.trim()) return true;
+  if (content.summary?.trim()) return true;
+  if ((content.experience?.length ?? 0) > 0) return true;
+  if ((content.education?.length ?? 0) > 0) return true;
+  if ((content.skills?.technical?.length ?? 0) > 0) return true;
+  if ((content.customSections?.length ?? 0) > 0) return true;
+  return false;
+}
+
+function ensureImportHasContent(rawText: string, content: ResumeContent): ResumeContent {
+  if (hasMeaningfulImportContent(content)) {
+    return content;
+  }
+
+  const trimmed = rawText.trim();
+  if (trimmed.length < 20) {
+    throw new AppError(
+      400,
+      'Could not read enough text from this file. Try Word (.docx), a text-based PDF, or a clear JPG/PNG photo.',
+    );
+  }
+
+  return normalizeResumeContent(
+    finalizeProfessionalImport({
+      ...content,
+      summary: trimmed.slice(0, 4000),
+      customSections: [
+        {
+          id: uuidv4(),
+          title: 'Imported Document',
+          items: [{ id: uuidv4(), content: trimmed.slice(0, 12000) }],
+        },
+      ],
+    }),
+  );
+}
+
+export function applyUserProfileToImport(
+  content: ResumeContent,
+  user: { name?: string | null; email?: string | null; phone?: string | null },
+): ResumeContent {
+  const personalInfo = { ...(content.personalInfo ?? {}) };
+
+  if (isBadParsedName(personalInfo.firstName, personalInfo.lastName) && user.name?.trim()) {
+    const parts = user.name.trim().split(/\s+/).filter(Boolean);
+    personalInfo.firstName = parts[0] ?? '';
+    personalInfo.lastName = parts.slice(1).join(' ');
+  }
+
+  if (!personalInfo.email && user.email) personalInfo.email = user.email;
+  if (!personalInfo.phone && user.phone) personalInfo.phone = user.phone;
+
+  return { ...content, personalInfo };
+}
+
 export async function parseImportedResume(
   userId: string,
   text: string,
@@ -259,5 +319,5 @@ export async function parseImportedResume(
     content = normalizeResumeContent(basicParseResumeText(text));
   }
 
-  return normalizeResumeContent(enrichImportedContent(text, content));
+  return ensureImportHasContent(text, normalizeResumeContent(enrichImportedContent(text, content)));
 }

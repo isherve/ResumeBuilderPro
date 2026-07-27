@@ -1,16 +1,32 @@
 import { useCallback, useRef } from 'react';
 import { resumeService } from '@/services/resume.service';
 import { useBuilderStore } from '@/store';
-import { debounce } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export function useAutosave(resumeId: string | undefined) {
   const { content, theme, isDirty, setDirty, setSaving } = useBuilderStore();
-  const debouncedSave = useRef(
-    debounce(async (id: string, c: typeof content, t: typeof theme) => {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelSave = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setSaving(false);
+  }, [setSaving]);
+
+  const save = useCallback(() => {
+    if (!resumeId || !isDirty) return;
+
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+
+    timerRef.current = setTimeout(async () => {
+      timerRef.current = null;
       try {
         setSaving(true);
-        await resumeService.update(id, { content: c, theme: t });
+        await resumeService.update(resumeId, { content, theme });
         setDirty(false);
         toast.success('Saved', { duration: 1500, id: 'autosave' });
       } catch {
@@ -18,14 +34,8 @@ export function useAutosave(resumeId: string | undefined) {
       } finally {
         setSaving(false);
       }
-    }, 2000),
-  ).current;
+    }, 2000);
+  }, [resumeId, isDirty, content, theme, setDirty, setSaving]);
 
-  const save = useCallback(() => {
-    if (resumeId && isDirty) {
-      debouncedSave(resumeId, content, theme);
-    }
-  }, [resumeId, isDirty, content, theme, debouncedSave]);
-
-  return { save, isDirty };
+  return { save, isDirty, cancelSave };
 }

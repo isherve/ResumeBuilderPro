@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Save, Download, Undo, Redo, ZoomIn, ZoomOut, Maximize,
   Share2, Palette, Upload,
@@ -21,6 +21,9 @@ import { useAutosave } from '@/hooks/useAutosave';
 import { exportToPDF, exportToJSON, printResume } from '@/utils/export';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { unwrapApiData } from '@/lib/apiHelpers';
+import { hasImportedContent } from '@/lib/resumeContent';
+import type { Resume, ResumeContent } from '@/types';
 
 export function BuilderPage() {
   const { id } = useParams<{ id: string }>();
@@ -29,12 +32,13 @@ export function BuilderPage() {
   const [title, setTitle] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const [templateLayout, setTemplateLayout] = useState<Record<string, unknown>>({});
+  const queryClient = useQueryClient();
   const {
-    content, theme, setContent, setTheme, updateContent,
+    content, theme, setContent, loadContent, applyImportedContent, setTheme, updateContent,
     undo, redo, undoStack, redoStack, isSaving, reset,
   } = useBuilderStore();
 
-  const { save, isDirty } = useAutosave(id);
+  const { save, isDirty, cancelSave } = useAutosave(id);
 
   const { data, isLoading } = useQuery({
     queryKey: ['resume', id],
@@ -45,13 +49,14 @@ export function BuilderPage() {
   useEffect(() => {
     if (data?.data?.data) {
       const resume = data.data.data;
-      setContent(resume.content);
-      setTheme(resume.theme);
+      loadContent((resume.content ?? {}) as ResumeContent);
+      setTheme(resume.theme ?? {});
       setTitle(resume.title);
       setTemplateLayout(resume.template?.layout ?? {});
     }
-    return () => reset();
-  }, [data, setContent, setTheme, reset]);
+  }, [data, loadContent, setTheme]);
+
+  useEffect(() => () => reset(), [reset]);
 
   useEffect(() => {
     if (isDirty) save();
@@ -231,8 +236,16 @@ export function BuilderPage() {
         resumeId={id}
         resumeTitle={title}
         onImported={(resume) => {
-          setContent(resume.content);
+          cancelSave();
+          if (!resume?.content || !hasImportedContent(resume.content)) {
+            toast.error('Import completed but no readable content was found. Try a Word (.docx) file.');
+            return;
+          }
+          applyImportedContent(resume.content);
           if (resume.title) setTitle(resume.title);
+          queryClient.setQueryData(['resume', id], {
+            data: { success: true, data: resume },
+          });
         }}
       />
     </div>

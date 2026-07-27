@@ -8,7 +8,9 @@ import {
   extractTextFromFile,
   isSupportedImportFile,
   parseImportedResume,
+  applyUserProfileToImport,
 } from '../services/resumeImport.service.js';
+import prisma from '../lib/prisma.js';
 import { uploadLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
@@ -74,7 +76,15 @@ router.post(
       req.file.originalname,
     );
 
-    const content = await parseImportedResume(req.authUser!.userId, text, isJson);
+    let content = await parseImportedResume(req.authUser!.userId, text, isJson);
+    const user = await prisma.user.findUnique({
+      where: { id: req.authUser!.userId },
+      select: { name: true, email: true, phone: true },
+    });
+    if (user) {
+      content = applyUserProfileToImport(content, user);
+    }
+
     const resume = await ResumeService.create(req.authUser!.userId, {
       title,
       templateId,
@@ -107,7 +117,15 @@ router.post(
       req.file.originalname,
     );
 
-    const content = await parseImportedResume(req.authUser!.userId, text, isJson);
+    let content = await parseImportedResume(req.authUser!.userId, text, isJson);
+    const user = await prisma.user.findUnique({
+      where: { id: req.authUser!.userId },
+      select: { name: true, email: true, phone: true },
+    });
+    if (user) {
+      content = applyUserProfileToImport(content, user);
+    }
+
     const resume = await ResumeService.update(req.authUser!.userId, resumeId, { content });
 
     res.json({

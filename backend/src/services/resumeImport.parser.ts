@@ -351,7 +351,7 @@ function linesToSkillItems(lines: string[]) {
     .join(', ')
     .split(/[,;|/]/)
     .map((skill) => skill.trim())
-    .filter((skill) => skill.length > 1 && skill.length < 50)
+    .filter((skill) => skill.length > 1 && skill.length < 50 && !/^[\d\s]+$/.test(skill))
     .slice(0, 30)
     .map((name) => ({ id: uuidv4(), name, level: 3 }));
 }

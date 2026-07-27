@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { templateService } from '@/services/template.service';
 import { resumeService } from '@/services/resume.service';
 import { unwrapApiData } from '@/lib/apiHelpers';
+import { countImportedSections, hasImportedContent } from '@/lib/resumeContent';
 import { toast } from 'sonner';
 import type { Resume, Template } from '@/types';
 
@@ -110,7 +111,19 @@ export function ImportResumeModal({
         const response = await resumeService.importIntoExisting(resumeId, file);
         const resume = unwrapApiData(response, null as unknown as Resume);
         setStep('creating');
-        toast.success('Your document was imported into this resume.');
+
+        if (!resume?.content || !hasImportedContent(resume.content)) {
+          toast.error('Could not read enough text from this file. Try Word (.docx) or a clearer PDF/photo.');
+          setStep('idle');
+          return;
+        }
+
+        const sections = countImportedSections(resume.content);
+        toast.success(
+          sections > 1
+            ? `Imported ${sections} sections into your resume.`
+            : 'Your document was imported into this resume.',
+        );
         onImported?.(resume);
         reset();
         onClose();
